@@ -37,7 +37,7 @@ var uri = require('./utils/uri');
  * as the necessary tiles to render the map.
  * @param {String} url Relative or absolute URL to the tmx file
  */
-var Map = exports.Map = function(url) {
+var Map = exports.Map = function(url, loadCallback) {
 
    url = uri.resolve(document.location.href, url);
    var xmlDoc = xml.Document.fromURL(url);
@@ -66,7 +66,7 @@ var Map = exports.Map = function(url) {
 
    var orientation = mapNode.attribute('orientation');
    if (orientation !== 'orthogonal') {
-      throw new Error('only orthogonol maps supported');
+      throw new Error('only orthogonal maps supported');
    }
 
    /**
@@ -75,13 +75,67 @@ var Map = exports.Map = function(url) {
    this.properties = {};
    setProperties(this.properties, mapNode);
 
-   /**
-    * All tiles of this map.
-    * @type {TileSet}
-    */
-   this.tiles = new TileSets(mapNode, url);
-   this.layers = loadLayers(mapNode);
+   var self = this;
+
+   if(loadCallback) {
+     checkAndLoad(mapNode, url);
+     gamejs.ready(function() {
+       self.layers = loadLayers(mapNode);
+       /**
+        * All tiles of this map.
+        * @type {TileSet}
+        */
+       self.tiles = new TileSets(mapNode, url);
+       loadCallback(self);
+     });
+   } else {
+
+     this.layers = loadLayers(mapNode);
+     /**
+      * All tiles of this map.
+      * @type {TileSet}
+      */
+     this.tiles = new TileSets(mapNode, url);
+
+   }
    return this;
+};
+
+
+
+function imageUrlFromTileset(tileSetNode, mapUrl) {
+
+  var imageNode = tileSetNode.element('image');
+  var imageAtlasFile = imageNode.attribute('source');
+  var imageUrl = uri.makeRelative(uri.resolve(mapUrl, imageAtlasFile));
+
+  return imageUrl;
+
+}
+
+var checkAndLoad = function(mapNode, mapUrl) {
+
+  var imagesToLoad = [];
+
+  mapNode.elements('tileset').forEach(function(tileSetNode) {
+
+    var externalSource = tileSetNode.attribute('source');
+    if (externalSource) {
+      var tileSetDocument = xml.Document.fromURL(uri.resolve(mapUrl, externalSource));
+      tileSetNode = tileSetDocument.element('tileset');
+    }
+
+    var imageUrl = imageUrlFromTileset(tileSetNode, mapUrl);
+    if (!gamejs.image.isLoaded(imageUrl)){
+      imagesToLoad.push(imageUrl);
+    }
+
+  });
+
+  if(imagesToLoad.length) {
+    gamejs.preload(imagesToLoad);
+  }
+
 };
 
 /**
@@ -366,7 +420,7 @@ var LayerView = exports.LayerView = function(layer, opts) {
                new gamejs.Rect([j * opts.tileWidth, i * opts.tileHeight], [opts.tileWidth, opts.tileHeight])
             );
          } else {
-            gamejs.log('no gid ', gid, i, j, 'layer', i);
+            console.log('no gid ', gid, i, j, 'layer', i);
          }
       }, this);
    }, this);

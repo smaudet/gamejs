@@ -19,6 +19,10 @@ var CACHE = {};
  */
 var _PRELOADING = false;
 
+exports.isLoaded = function(key) {
+   return !!CACHE[key];
+};
+
 /**
  * Load image and return it on a Surface.
  *
